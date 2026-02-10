@@ -34,7 +34,7 @@ const ABOUT_TABS = [
     label: "Consequential Decisions",
     href: "#consequential-decisions",
   },
-  { id: "etymology", label: "Etymology", href: "#etymology" },
+  { id: "etymology", label: "On the Name", href: "#etymology" },
 ] as const;
 
 const NAVBAR_HEIGHT = 80;
@@ -680,7 +680,7 @@ const Context = () => {
             className="font-serif text-base text-foreground leading-relaxed animate-fade-in"
             style={{ willChange: "opacity, transform" }}
           >
-            The name ISII draws, lightly and intentionally, from the ancient
+            The name <strong>ISII</strong> draws, lightly and intentionally, from the ancient
             Indic idea of the seer (/ˈɪ.si/) - one who perceives emerging reality
             before it becomes obvious. Used metaphorically, it reflects the view
             that strategy begins with clarity of seeing, from which foresight
