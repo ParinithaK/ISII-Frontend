@@ -47,7 +47,11 @@ const Context = () => {
   const [tabsHeight, setTabsHeight] = useState(0);
 
   // prevents scroll listener from overriding immediately after click
-  const [isManualTabChange, setIsManualTabChange] = useState(false);
+  const isManualTabChangeRef = useRef(false);
+  const pendingTabRef = useRef<(typeof ABOUT_TABS)[number]["id"] | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
+  const lastScrollYRef = useRef<number>(0);
+  const stableFramesRef = useRef<number>(0);
 
   const tabsSentinelRef = useRef<HTMLDivElement | null>(null);
   const tabsBarRef = useRef<HTMLElement | null>(null);
@@ -89,19 +93,48 @@ const Context = () => {
   }, []);
 
   useEffect(() => {
-    const stickyOffset = NAVBAR_HEIGHT + tabsHeight + 24;
-
     const updateActiveTab = () => {
-      if (isManualTabChange) return;
+      if (isManualTabChangeRef.current) {
+        const pendingId = pendingTabRef.current;
+        const pendingEl = pendingId ? document.getElementById(pendingId) : null;
+        const isAtBottom =
+          window.scrollY + window.innerHeight >=
+          document.documentElement.scrollHeight - 2;
+        const tabsBottom =
+          tabsBarRef.current?.getBoundingClientRect().bottom ?? NAVBAR_HEIGHT;
 
-      const scrollPosition = window.scrollY + stickyOffset;
+        if (
+          (pendingEl && pendingEl.getBoundingClientRect().top <= tabsBottom + 1) ||
+          isAtBottom
+        ) {
+          isManualTabChangeRef.current = false;
+          pendingTabRef.current = null;
+        } else {
+          return;
+        }
+      }
+
       let currentSection: (typeof ABOUT_TABS)[number]["id"] = "context";
+      let closest = Number.NEGATIVE_INFINITY;
+      const tabsBottom =
+        tabsBarRef.current?.getBoundingClientRect().bottom ?? NAVBAR_HEIGHT;
 
       for (const tab of ABOUT_TABS) {
         const section = document.getElementById(tab.id);
-        if (section && section.offsetTop <= scrollPosition) {
+        if (!section) continue;
+
+        const distance = section.getBoundingClientRect().top - (tabsBottom + 1);
+        if (distance <= 0 && distance > closest) {
+          closest = distance;
           currentSection = tab.id;
         }
+      }
+
+      const isAtBottom =
+        window.scrollY + window.innerHeight >=
+        document.documentElement.scrollHeight - 2;
+      if (isAtBottom) {
+        currentSection = ABOUT_TABS[ABOUT_TABS.length - 1].id;
       }
 
       setActiveTab(currentSection);
@@ -109,8 +142,21 @@ const Context = () => {
 
     updateActiveTab();
     window.addEventListener("scroll", updateActiveTab, { passive: true });
-    return () => window.removeEventListener("scroll", updateActiveTab);
-  }, [tabsHeight, isManualTabChange]);
+    window.addEventListener("resize", updateActiveTab);
+    return () => {
+      window.removeEventListener("scroll", updateActiveTab);
+      window.removeEventListener("resize", updateActiveTab);
+    };
+  }, [tabsHeight]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+    };
+  }, []);
 
   const handleTabClick = (
     e: React.MouseEvent<HTMLAnchorElement>,
@@ -122,16 +168,73 @@ const Context = () => {
     setActiveTab(tabId);
 
     // avoid scroll overriding during smooth scroll
-    setIsManualTabChange(true);
+    isManualTabChangeRef.current = true;
+    stableFramesRef.current = 0;
+    pendingTabRef.current = tabId;
 
     const el = document.getElementById(tabId);
     if (el) {
-      const stickyOffset = NAVBAR_HEIGHT + tabsHeight + 24;
-      const top = el.getBoundingClientRect().top + window.scrollY - stickyOffset;
+      const tabsBottom =
+        tabsBarRef.current?.getBoundingClientRect().bottom ?? NAVBAR_HEIGHT;
+      const top = el.getBoundingClientRect().top + window.scrollY - tabsBottom;
       window.scrollTo({ top, behavior: "smooth" });
     }
 
-    window.setTimeout(() => setIsManualTabChange(false), 700);
+    if (scrollRafRef.current !== null) {
+      cancelAnimationFrame(scrollRafRef.current);
+    }
+
+    const waitForScrollStop = () => {
+      const pendingTop = pendingScrollTopRef.current;
+      const isAtBottom =
+        window.scrollY + window.innerHeight >=
+        document.documentElement.scrollHeight - 2;
+
+      if (
+        (pendingTabRef.current &&
+          document
+            .getElementById(pendingTabRef.current)
+            ?.getBoundingClientRect().top <=
+            (tabsBarRef.current?.getBoundingClientRect().bottom ??
+              NAVBAR_HEIGHT) +
+              1) ||
+        isAtBottom
+      ) {
+        isManualTabChangeRef.current = false;
+        pendingTabRef.current = null;
+        scrollRafRef.current = null;
+        return;
+      }
+
+      const delta = Math.abs(window.scrollY - lastScrollYRef.current);
+      lastScrollYRef.current = window.scrollY;
+      if (delta <= 0.5) {
+        stableFramesRef.current += 1;
+      } else {
+        stableFramesRef.current = 0;
+      }
+
+      if (stableFramesRef.current >= 8) {
+        isManualTabChangeRef.current = false;
+        pendingTabRef.current = null;
+        scrollRafRef.current = null;
+        return;
+      }
+
+      scrollRafRef.current = requestAnimationFrame(waitForScrollStop);
+    };
+
+    lastScrollYRef.current = window.scrollY;
+    scrollRafRef.current = requestAnimationFrame(waitForScrollStop);
+
+    window.setTimeout(() => {
+      isManualTabChangeRef.current = false;
+      pendingTabRef.current = null;
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+    }, 3500);
   };
 
   return (
@@ -185,7 +288,7 @@ const Context = () => {
         ref={tabsBarRef}
         className={`${
           isTabsPinned ? "fixed inset-x-0 top-[80px] z-40" : "relative"
-        } w-full bg-background border-b border-border shadow-sm`}
+        } w-full bg-white border-b border-border shadow-sm`}
       >
         <div className="container-custom section-padding py-4 overflow-x-auto">
           <nav
@@ -209,8 +312,8 @@ const Context = () => {
                     "h-9 px-3 rounded-md whitespace-nowrap",
                     // highlight only active tab
                     isActive
-                      ? "font-semibold bg-primary/10"
-                      : "font-medium hover:bg-primary/10",
+                      ? "font-semibold bg-primary text-white"
+                      : "font-medium",
                     // accessibility/focus
                     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   ].join(" ")}
