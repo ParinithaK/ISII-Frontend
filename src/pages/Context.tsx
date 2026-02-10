@@ -673,7 +673,7 @@ const Context = () => {
             className="font-serif text-2xl md:text-3xl font-bold text-primary mb-8 animate-fade-in"
             style={{ willChange: "opacity, transform" }}
           >
-            Etymology
+            On the Name
           </h2>
 
           <p
