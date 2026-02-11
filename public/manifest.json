@@ -9,13 +9,13 @@
       "src": "https://res.cloudinary.com/dqataciy5/image/upload/v1770382261/Group_7_1_uh9qfb.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "https://res.cloudinary.com/dqataciy5/image/upload/v1770382261/Group_7_1_uh9qfb.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }
